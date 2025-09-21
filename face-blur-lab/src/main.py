@@ -3,24 +3,23 @@ import numpy as np
 from PIL import Image
 
 # ---------- Настройки ----------
-INPUT_IMAGE = "images/actor.jpg"         # Положи сюда фото актёра/актрисы
-SUNGLASSES_PNG = "images/sunglasses.png" # PNG с альфой (готовый файл уже лежит в папке images/)
+INPUT_IMAGE = "images/actor.jpg"        
+SUNGLASSES_PNG = "images/sunglasses.png" 
 OUTPUT_NO_GLASSES = "images/result_blur_no_glasses.jpg"
 OUTPUT_WITH_GLASSES = "images/result_blur_with_glasses.jpg"
 
 # Параметры овала относительно прямоугольника лица
-ELLIPSE_SCALE_X = 1.05  # ширина овала относительно ширины лица
-ELLIPSE_SCALE_Y = 1.20  # высота овала относительно высоты лица
-ELLIPSE_SHIFT_Y = 0.05  # смещение центра овала вниз (доля высоты лица)
+ELLIPSE_SCALE_X = 1.05  
+ELLIPSE_SCALE_Y = 1.20 
+ELLIPSE_SHIFT_Y = 0.05  
 
 # Параметры кружков глаз
-EYE_RADIUS_FACTOR = 0.25  # радиус круга глаза как доля средней ширины глаза (по каскаду)
+EYE_RADIUS_FACTOR = 0.25  
 
 # Размытие
-BLUR_KSIZE = (55, 55)  # ядро Гаусса
-BLUR_SIGMA = 0         # авто
+BLUR_KSIZE = (55, 55) 
+BLUR_SIGMA = 0        
 
-# ---------- Хелперы ----------
 def load_cascade(name):
     path = cv2.data.haarcascades + name
     cascade = cv2.CascadeClassifier(path)
@@ -32,7 +31,6 @@ face_cascade = load_cascade("haarcascade_frontalface_default.xml")
 eye_cascade  = load_cascade("haarcascade_eye.xml")
 
 def overlay_transparent(bg_bgr, overlay_rgba, x, y, overlay_w=None, overlay_h=None):
-    """Наложение PNG с альфой на BGR-картинку at (x,y)."""
     img = Image.fromarray(cv2.cvtColor(bg_bgr, cv2.COLOR_BGR2RGB)).convert("RGBA")
     ov = Image.fromarray(overlay_rgba, "RGBA")
     if overlay_w is not None and overlay_h is not None:
@@ -41,7 +39,6 @@ def overlay_transparent(bg_bgr, overlay_rgba, x, y, overlay_w=None, overlay_h=No
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGBA2BGR)
 
 def blur_face_except_eyes(img_bgr, face_rect, eyes_in_face):
-    """Размывает лицо внутри овала, НО сохраняет зоны глаз нерезкими (резкими)."""
     (fx, fy, fw, fh) = face_rect
     h, w = img_bgr.shape[:2]
 
@@ -51,7 +48,7 @@ def blur_face_except_eyes(img_bgr, face_rect, eyes_in_face):
     axes   = (int(fw*ELLIPSE_SCALE_X/2), int(fh*ELLIPSE_SCALE_Y/2))
     cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
 
-    # Маска глаз (зоны исключения из размытия)
+    # Маска глаз
     eyes_mask = np.zeros((h, w), dtype=np.uint8)
     for (ex, ey, ew, eh) in eyes_in_face:
         cx = fx + ex + ew//2
@@ -119,7 +116,7 @@ def main():
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 1) Лицо
+
     face_cascade = load_cascade("haarcascade_frontalface_default.xml")
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(120, 120))
     if len(faces) == 0:
@@ -128,26 +125,23 @@ def main():
     faces_sorted = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
     (fx, fy, fw, fh) = faces_sorted[0]
 
-    # 2) Глаза в ROI
+  
     eye_cascade  = load_cascade("haarcascade_eye.xml")
     face_roi_gray = gray[fy:fy+fh, fx:fx+fw]
     eyes = eye_cascade.detectMultiScale(face_roi_gray, scaleFactor=1.1, minNeighbors=5, minSize=(25, 25))
 
     eyes_filtered = []
     for (ex, ey, ew, eh) in eyes:
-        if ey + eh/2 < fh * 0.65:  # верхние 2/3 лица
+        if ey + eh/2 < fh * 0.65:
             eyes_filtered.append((ex, ey, ew, eh))
 
-    # Визуальный дебаг
     debug_img = img.copy()
     draw_debug_shapes(debug_img, (fx, fy, fw, fh), eyes_filtered)
     cv2.imwrite("images/debug_shapes.jpg", debug_img)
 
-    # 3) Размытие лица без глаз
     out_no_glasses = blur_face_except_eyes(img.copy(), (fx, fy, fw, fh), eyes_filtered)
     cv2.imwrite(OUTPUT_NO_GLASSES, out_no_glasses)
 
-    # 4) Очки поверх результата
     out_with_glasses = place_sunglasses(out_no_glasses.copy(), (fx, fy, fw, fh), eyes_filtered, SUNGLASSES_PNG)
     cv2.imwrite(OUTPUT_WITH_GLASSES, out_with_glasses)
 
